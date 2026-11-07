@@ -19,8 +19,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
-
+      # 안드로이드 SDK는 GitHub 빌드 서버에 이미 설치되어 있음 (ANDROID_HOME)
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
