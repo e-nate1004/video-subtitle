@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.enate.videosubtitle'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.enate.videosubtitle'
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName '2.0'
+    }
+
+    signingConfigs {
+        release {
+            storeFile file('release.jks')
+            storePassword 'videosub2026'
+            keyAlias 'videosub'
+            keyPassword 'videosub2026'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

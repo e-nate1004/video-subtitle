@@ -1,0 +1,53 @@
+name: APK 빌드
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: 자막 글꼴(Noto Sans KR) 받기
+        run: |
+          mkdir -p app/src/main/assets
+          curl -fL --retry 3 -o app/src/main/assets/NotoSansKR.ttf \
+            "https://github.com/google/fonts/raw/main/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf" \
+            || echo "글꼴 다운로드 실패 — 기기 기본 고딕으로 표시됩니다"
+
+      - name: APK 만들기
+        run: gradle assembleRelease --stacktrace
+
+      - name: 파일 이름 정리
+        run: cp app/build/outputs/apk/release/app-release.apk video-subtitle.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: video-subtitle-apk
+          path: video-subtitle.apk
+
+      - name: Releases에 올리기
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: 영상 자막 v2.0 (빌드 ${{ github.run_number }})
+          body: 폰에서 video-subtitle.apk를 내려받아 설치하세요.
+          files: video-subtitle.apk
+          make_latest: true
