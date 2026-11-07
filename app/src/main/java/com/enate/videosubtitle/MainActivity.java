@@ -88,6 +88,11 @@ public class MainActivity extends Activity {
         modelEdit.setText(prefs.model());
         root.addView(modelEdit);
 
+        Button check = new Button(this);
+        check.setText("키 확인 · 모델 자동 선택");
+        check.setOnClickListener(v -> checkKey(check));
+        root.addView(check);
+
         sizeLabel = label("");
         root.addView(sizeLabel);
         sizeBar = new SeekBar(this);
@@ -250,6 +255,40 @@ public class MainActivity extends Activity {
         startForegroundService(i);
         toast("자막을 시작합니다. 비디오 플레이어에서 영상을 재생하세요.");
         moveTaskToBack(true);
+    }
+
+    /** 키가 맞는지 확인하고, 이 키로 쓸 수 있는 최신 flash 모델을 골라 넣는다. */
+    private void checkKey(Button btn) {
+        String key = keyEdit.getText().toString().trim();
+        if (key.isEmpty()) {
+            toast("Gemini API 키를 먼저 입력해 주세요.");
+            return;
+        }
+        btn.setEnabled(false);
+        btn.setText("확인 중…");
+        new Thread(() -> {
+            String msg;
+            String picked = null;
+            try {
+                picked = GeminiClient.pickModel(key);
+                msg = picked == null ? "키는 맞지만 쓸 수 있는 flash 모델을 찾지 못했습니다."
+                        : "키 확인 완료 ✅ 모델: " + picked;
+            } catch (GeminiClient.ApiException e) {
+                msg = "키 오류 (" + e.code + "): " + e.getMessage();
+            } catch (Exception e) {
+                msg = "인터넷 연결을 확인해 주세요. (" + e.getClass().getSimpleName() + ")";
+            }
+            final String m = msg, p = picked;
+            runOnUiThread(() -> {
+                btn.setEnabled(true);
+                btn.setText("키 확인 · 모델 자동 선택");
+                if (p != null) {
+                    modelEdit.setText(p);
+                    saveSettings();
+                }
+                toast(m);
+            });
+        }).start();
     }
 
     private void toast(String s) {

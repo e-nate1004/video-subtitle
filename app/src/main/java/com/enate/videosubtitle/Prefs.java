@@ -5,7 +5,7 @@ import android.content.SharedPreferences;
 
 /** 이 폰의 앱 전용 저장소에만 설정을 보관한다 (백업 꺼짐). */
 final class Prefs {
-    static final String DEFAULT_MODEL = "gemini-2.5-flash";
+    static final String DEFAULT_MODEL = "gemini-3.5-flash";
 
     private final SharedPreferences sp;
 
@@ -34,6 +34,7 @@ final class Prefs {
                 .apply();
     }
 
+    void setModel(String m) { sp.edit().putString("model", m).apply(); }
     void setTop(boolean top) { sp.edit().putBoolean("top", top).apply(); }
     void setBubble(int x, int y) { sp.edit().putInt("bx", x).putInt("by", y).apply(); }
 }

@@ -358,10 +358,17 @@ public class CaptionService extends Service {
                     showError("⚠ 요청 한도 초과 — 잠시 후 다시 나옵니다");
                     return;
                 }
-                if (e.code == 400 || e.code == 401 || e.code == 403 || e.code == 404) {
-                    showError("⚠ API 키 또는 모델(" + model + ")을 확인해 주세요");
-                    return;
+                if (e.code == 404 || (e.code == 400 && String.valueOf(e.getMessage()).contains("model"))) {
+                    // 모델 서비스가 끝났거나 이름이 틀림 → 쓸 수 있는 최신 모델로 바꿔 다시
+                    String next = switchModel(key, model);
+                    if (next != null) {
+                        model = next;
+                        continue;
+                    }
                 }
+                showError("⚠ " + e.code + " " + shortMsg(e.getMessage())
+                        + (e.code == 400 || e.code == 403 ? "\nAPI 키를 확인해 주세요" : ""));
+                return;
                 sleep(800L * (attempt + 1)); // 500대 오류는 재시도
             } catch (IOException e) {
                 sleep(800L * (attempt + 1));  // 네트워크 오류 재시도
@@ -370,6 +377,31 @@ public class CaptionService extends Service {
             }
         }
         showError("⚠ 인터넷 연결을 확인해 주세요");
+    }
+
+    private final Object modelLock = new Object();
+
+    /** 지금 모델이 안 되면 이 키로 쓸 수 있는 모델을 골라 저장. 바꿀 게 없으면 null */
+    private String switchModel(String key, String failed) {
+        synchronized (modelLock) {
+            String saved = prefs.model();
+            if (!saved.equals(failed)) return saved; // 다른 요청이 이미 바꿈
+            try {
+                String picked = GeminiClient.pickModel(key);
+                if (picked == null || picked.equals(failed)) return null;
+                prefs.setModel(picked);
+                main.post(() -> showCaption("모델을 " + picked + "(으)로 바꿨습니다", ""));
+                return picked;
+            } catch (Exception e) {
+                return null;
+            }
+        }
+    }
+
+    private static String shortMsg(String m) {
+        if (m == null) return "";
+        m = m.replace('\n', ' ');
+        return m.length() > 80 ? m.substring(0, 80) + "…" : m;
     }
 
     private static void sleep(long ms) {

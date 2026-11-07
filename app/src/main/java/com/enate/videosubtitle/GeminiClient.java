@@ -55,12 +55,32 @@ final class GeminiClient {
                 .put("role", "user")
                 .put("parts", new JSONArray().put(audio).put(text));
 
+        try {
+            return send(apiKey, model, content, true);
+        } catch (ApiException e) {
+            // 모델이 생각 설정을 받지 않으면 설정 없이 한 번 더
+            if (e.code == 400 && e.getMessage() != null
+                    && e.getMessage().toLowerCase().contains("think")) {
+                return send(apiKey, model, content, false);
+            }
+            throw e;
+        }
+    }
+
+    private static Result send(String apiKey, String model, JSONObject content,
+                               boolean fastThinking) throws Exception {
         JSONObject gen = new JSONObject()
                 .put("temperature", 0.2)
                 .put("responseMimeType", "application/json");
-        if (model.contains("flash")) {
-            // flash 계열은 생각 단계를 꺼서 응답을 빠르게
-            gen.put("thinkingConfig", new JSONObject().put("thinkingBudget", 0));
+        if (fastThinking) {
+            if (model.contains("gemini-2")) {
+                if (model.contains("flash")) {
+                    gen.put("thinkingConfig", new JSONObject().put("thinkingBudget", 0));
+                }
+            } else {
+                // Gemini 3 이후: 생각을 가장 짧게 해서 응답을 빠르게
+                gen.put("thinkingConfig", new JSONObject().put("thinkingLevel", "minimal"));
+            }
         }
         JSONObject body = new JSONObject()
                 .put("contents", new JSONArray().put(content))
@@ -104,6 +124,59 @@ final class GeminiClient {
             out.append(p.optString("text", ""));
         }
         return parse(out.toString());
+    }
+
+    /**
+     * 이 키로 쓸 수 있는 모델 중 자막 번역에 가장 알맞은 것(최신 정식 flash)을 고른다.
+     * 키가 틀리면 ApiException.
+     */
+    static String pickModel(String apiKey) throws Exception {
+        URL url = new URL("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000");
+        HttpURLConnection con = (HttpURLConnection) url.openConnection();
+        con.setConnectTimeout(10000);
+        con.setReadTimeout(20000);
+        con.setRequestProperty("x-goog-api-key", apiKey);
+        int code = con.getResponseCode();
+        String resp = readAll(code >= 400 ? con.getErrorStream() : con.getInputStream());
+        con.disconnect();
+        if (code >= 400) throw new ApiException(code, errorMessage(resp));
+
+        JSONArray models = new JSONObject(resp).optJSONArray("models");
+        String best = null;
+        double bestScore = -1;
+        if (models == null) return null;
+        for (int i = 0; i < models.length(); i++) {
+            JSONObject m = models.getJSONObject(i);
+            String name = m.optString("name", "").replace("models/", "");
+            JSONArray methods = m.optJSONArray("supportedGenerationMethods");
+            if (methods == null || !methods.toString().contains("generateContent")) continue;
+            if (!name.startsWith("gemini-") || !name.contains("flash")) continue;
+            if (name.matches(".*(image|tts|live|audio|embedding|robotics|exp|computer|thinking).*")) continue;
+            double ver = version(name);
+            double score = ver * 10;
+            if (name.contains("lite")) score -= 3;      // lite는 번역 품질이 조금 낮음
+            if (name.contains("preview")) score -= 5;   // 정식 모델 우선
+            if (name.matches(".*-\\d{2,3}$")) score -= 0.5; // 날짜 붙은 고정판보다 기본 이름 우선
+            if (score > bestScore) {
+                bestScore = score;
+                best = name;
+            }
+        }
+        return best;
+    }
+
+    private static double version(String name) {
+        java.util.regex.Matcher mt = java.util.regex.Pattern.compile("gemini-(\\d+(?:\\.\\d+)?)").matcher(name);
+        if (!mt.find()) return 0;
+        try { return Double.parseDouble(mt.group(1)); } catch (Exception e) { return 0; }
+    }
+
+    private static String errorMessage(String resp) {
+        try {
+            return new JSONObject(resp).getJSONObject("error").optString("message", resp);
+        } catch (Exception e) {
+            return resp;
+        }
     }
 
     private static Result parse(String s) {
