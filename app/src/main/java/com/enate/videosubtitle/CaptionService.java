@@ -366,10 +366,13 @@ public class CaptionService extends Service {
                         continue;
                     }
                 }
+                if (e.code >= 500) {
+                    sleep(800L * (attempt + 1)); // 구글 서버 오류는 재시도
+                    continue;
+                }
                 showError("⚠ " + e.code + " " + shortMsg(e.getMessage())
                         + (e.code == 400 || e.code == 403 ? "\nAPI 키를 확인해 주세요" : ""));
                 return;
-                sleep(800L * (attempt + 1)); // 500대 오류는 재시도
             } catch (IOException e) {
                 sleep(800L * (attempt + 1));  // 네트워크 오류 재시도
             } catch (Exception e) {
